@@ -364,28 +364,25 @@ section{padding:100px 24px}
   background:linear-gradient(180deg,#070c1f 0%,var(--ink) 100%);
 }
 
-/* ─ MOBILE: infinite auto-slider ─ */
+/* ─ MOBILE: swipeable infinite auto-slider ─ */
 .g-carousel-wrap{display:block}
 .slider-outer{
   overflow:hidden;border-radius:20px;
   position:relative;
+  touch-action:pan-y;
+  user-select:none;-webkit-user-select:none;
   /* fade edges */
   mask-image:linear-gradient(90deg,transparent 0%,#000 8%,#000 92%,transparent 100%);
   -webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 8%,#000 92%,transparent 100%);
 }
 .slider-track{
   display:flex;
-  /* no gap here — use margin-right on items for clean infinite-loop math */
   will-change:transform;
-  animation:slide-infinite 30s linear infinite;
+  cursor:grab;
+  touch-action:pan-y;
 }
-/* Pause on hover (desktop) */
-.slider-outer:hover .slider-track{
-  animation-play-state:paused;
-}
-/* Pause on touch (toggled by JS) */
-.slider-outer.touch-pause .slider-track{
-  animation-play-state:paused;
+.slider-outer.grabbing .slider-track{
+  cursor:grabbing;
 }
 .slide-item{
   flex:0 0 80vw;max-width:300px;
@@ -829,12 +826,12 @@ footer::before{
           <div class="slide-item" data-idx="4"><img src="photos/887dc234-5e47-4bf4-a15a-d6d54ebd67c3.jpg" alt="New Year together" loading="lazy"/></div>
           <div class="slide-item" data-idx="5"><img src="photos/774667142_4358307104482283_1460023845627101255_n.jpg" alt="Us smiling" loading="lazy"/></div>
           <!-- Clones for seamless loop -->
-          <div class="slide-item"><img src="photos/cb118438-329d-4212-8d9a-624b9e11e569.jpg" alt="" loading="lazy"/></div>
-          <div class="slide-item"><img src="photos/3b454914-ecfd-410f-addb-d20e0df068d8 (1).jpg" alt="" loading="lazy"/></div>
-          <div class="slide-item"><img src="photos/1559dc9d-a777-4d20-953a-5d20b955db0b.jpg" alt="" loading="lazy"/></div>
-          <div class="slide-item"><img src="photos/7e758d45-afa1-4c32-9330-e84c1717f29e.jpg" alt="" loading="lazy"/></div>
-          <div class="slide-item"><img src="photos/887dc234-5e47-4bf4-a15a-d6d54ebd67c3.jpg" alt="" loading="lazy"/></div>
-          <div class="slide-item"><img src="photos/774667142_4358307104482283_1460023845627101255_n.jpg" alt="" loading="lazy"/></div>
+          <div class="slide-item" data-idx="0"><img src="photos/cb118438-329d-4212-8d9a-624b9e11e569.jpg" alt="" loading="lazy"/></div>
+          <div class="slide-item" data-idx="1"><img src="photos/3b454914-ecfd-410f-addb-d20e0df068d8 (1).jpg" alt="" loading="lazy"/></div>
+          <div class="slide-item" data-idx="2"><img src="photos/1559dc9d-a777-4d20-953a-5d20b955db0b.jpg" alt="" loading="lazy"/></div>
+          <div class="slide-item" data-idx="3"><img src="photos/7e758d45-afa1-4c32-9330-e84c1717f29e.jpg" alt="" loading="lazy"/></div>
+          <div class="slide-item" data-idx="4"><img src="photos/887dc234-5e47-4bf4-a15a-d6d54ebd67c3.jpg" alt="" loading="lazy"/></div>
+          <div class="slide-item" data-idx="5"><img src="photos/774667142_4358307104482283_1460023845627101255_n.jpg" alt="" loading="lazy"/></div>
         </div>
       </div>
       <div class="g-dots" id="g-dots">
@@ -893,6 +890,12 @@ footer::before{
 </div>
 
 <script>
+// Always start at hero section
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+window.scrollTo(0, 0);
+if (window.location.hash) {
+  history.replaceState(null, '', window.location.pathname + window.location.search);
+}
 /* ── ELAPSED COUNTER (since Feb 24 2024) ───── */
 (function(){
   const start = new Date('2024-02-24T00:00:00');
@@ -1067,102 +1070,240 @@ footer::before{
   document.querySelectorAll('.rv').forEach(el=>obs.observe(el));
 }());
 
-/* ── SMOOTH CSS INFINITE SLIDER ────────── */
+/* ── GALLERY LIGHTBOX ──────────────────────── */
+window.openGalleryLightbox = null;
 (function(){
-  const track  = document.getElementById('slider-track');
-  const outer  = track ? track.parentElement : null;
-  if(!track || !outer) return;
-
-  // Touch: pause while finger is down, resume 1.2s after lift
-  let resumeTimer;
-  outer.addEventListener('touchstart', () => {
-    clearTimeout(resumeTimer);
-    outer.classList.add('touch-pause');
-  }, {passive:true});
-  outer.addEventListener('touchend', () => {
-    resumeTimer = setTimeout(() => outer.classList.remove('touch-pause'), 1200);
-  }, {passive:true});
-
-  // Dot progress: 30s ÷ 6 photos = 5s per photo
-  const DURATION = 30000;
-  const ORIG     = 6;
-  const dots     = [...document.querySelectorAll('#g-dots .g-dot')];
-  let startTime  = null;
-  function tickDots(ts){
-    if(!startTime) startTime = ts;
-    const elapsed = (ts - startTime) % DURATION;
-    const idx = Math.floor((elapsed / DURATION) * ORIG);
-    dots.forEach((d,i) => d.classList.toggle('active', i === idx));
-    requestAnimationFrame(tickDots);
-  }
-  if(dots.length) requestAnimationFrame(tickDots);
-
-  // Lightbox on tap
   const photos = [
-    'photos/cb118438-329d-4212-8d9a-624b9e11e569.jpg',
-    'photos/3b454914-ecfd-410f-addb-d20e0df068d8 (1).jpg',
-    'photos/1559dc9d-a777-4d20-953a-5d20b955db0b.jpg',
-    'photos/7e758d45-afa1-4c32-9330-e84c1717f29e.jpg',
-    'photos/887dc234-5e47-4bf4-a15a-d6d54ebd67c3.jpg',
-    'photos/774667142_4358307104482283_1460023845627101255_n.jpg',
+    { src: 'photos/cb118438-329d-4212-8d9a-624b9e11e569.jpg', alt: 'Together at the viewpoint' },
+    { src: 'photos/3b454914-ecfd-410f-addb-d20e0df068d8 (1).jpg', alt: 'Church selfie' },
+    { src: 'photos/1559dc9d-a777-4d20-953a-5d20b955db0b.jpg', alt: 'Night together' },
+    { src: 'photos/7e758d45-afa1-4c32-9330-e84c1717f29e.jpg', alt: 'Park day' },
+    { src: 'photos/887dc234-5e47-4bf4-a15a-d6d54ebd67c3.jpg', alt: 'New Year together' },
+    { src: 'photos/774667142_4358307104482283_1460023845627101255_n.jpg', alt: 'Us smiling' },
   ];
-  track.querySelectorAll('.slide-item[data-idx]').forEach(el => {
-    el.addEventListener('click', () => {
-      const lb    = document.getElementById('lb');
-      const lbImg = document.getElementById('lb-img');
-      lbImg.src   = photos[Number(el.dataset.idx)];
-      lb.classList.add('on');
-      document.body.style.overflow = 'hidden';
+  const lb     = document.getElementById('lb');
+  const lbImg  = document.getElementById('lb-img');
+  const lbX    = document.getElementById('lb-x');
+  const lbPrev = document.getElementById('lb-prev');
+  const lbNext = document.getElementById('lb-next');
+
+  let cur = 0;
+  function open(i){
+    if(!lb || !lbImg) return;
+    cur = ((i % photos.length) + photos.length) % photos.length;
+    lbImg.src = photos[cur].src;
+    lbImg.alt = photos[cur].alt;
+    lb.classList.add('on');
+    document.body.style.overflow = 'hidden';
+  }
+  window.openGalleryLightbox = open;
+
+  function close(){
+    if(!lb) return;
+    lb.classList.remove('on');
+    document.body.style.overflow = '';
+    setTimeout(() => { if(lbImg) lbImg.src = ''; }, 360);
+  }
+
+  document.querySelectorAll('#g-grid .g-item[data-idx]').forEach(el => {
+    el.addEventListener('click', () => open(Number(el.dataset.idx)));
+    el.addEventListener('keydown', e => {
+      if(e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        open(Number(el.dataset.idx));
+      }
     });
   });
+
+  if(lbX) lbX.addEventListener('click', close);
+  if(lbPrev) lbPrev.addEventListener('click', () => open(cur - 1));
+  if(lbNext) lbNext.addEventListener('click', () => open(cur + 1));
+  if(lb) lb.addEventListener('click', e => { if(e.target === lb) close(); });
+
+  document.addEventListener('keydown', e => {
+    if(!lb || !lb.classList.contains('on')) return;
+    if(e.key === 'Escape') close();
+    if(e.key === 'ArrowLeft') open(cur - 1);
+    if(e.key === 'ArrowRight') open(cur + 1);
+  });
+
+  let tx = 0;
+  if(lb){
+    lb.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, {passive:true});
+    lb.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - tx;
+      if(Math.abs(dx) > 45) dx < 0 ? open(cur + 1) : open(cur - 1);
+    });
+  }
 }());
 
-/* ── GALLERY LIGHTBOX ──────────────────────── */
+/* ── SWIPEABLE INFINITE AUTO-SLIDER ────────── */
 (function(){
-  const allItems=[...document.querySelectorAll('.g-item[data-idx]')];
-  const lb=document.getElementById('lb');
-  const lbImg=document.getElementById('lb-img');
-  const lbX=document.getElementById('lb-x');
-  const lbPrev=document.getElementById('lb-prev');
-  const lbNext=document.getElementById('lb-next');
-  // deduplicate by idx
-  const photos=[];
-  allItems.forEach(el=>{
-    const idx=Number(el.dataset.idx);
-    const img=el.querySelector('img');
-    if(!photos[idx]) photos[idx]={src:img.src,alt:img.alt};
-  });
-  let cur=0;
-  function open(i){
-    cur=((i%photos.length)+photos.length)%photos.length;
-    lbImg.src=photos[cur].src;lbImg.alt=photos[cur].alt;
-    lb.classList.add('on');document.body.style.overflow='hidden';
+  const track = document.getElementById('slider-track');
+  const outer = track ? track.parentElement : null;
+  if(!track || !outer) return;
+
+  const dots = [...document.querySelectorAll('#g-dots .g-dot')];
+  const ORIG = 6;
+  const SPEED = 1.35; // Fast, lively, smooth auto-scrolling
+  
+  let offset = 0;
+  let isDragging = false;
+  let isPaused = false;
+  let hasMoved = false;
+  let startX = 0;
+  let startY = 0;
+  let startOffset = 0;
+  let itemWidth = 0;
+  let loopWidth = 0;
+  let resumeTimer = null;
+  let velocity = 0;
+  let lastX = 0;
+  let lastTime = 0;
+
+  function measure(){
+    const items = track.querySelectorAll('.slide-item');
+    if(items.length >= 2){
+      itemWidth = items[1].offsetLeft - items[0].offsetLeft;
+      loopWidth = itemWidth * ORIG;
+    }
   }
-  function close(){
-    lb.classList.remove('on');document.body.style.overflow='';
-    setTimeout(()=>lbImg.src='',360);
+
+  function updateTransform(){
+    if(!loopWidth) measure();
+    if(loopWidth > 0){
+      while(offset >= loopWidth) offset -= loopWidth;
+      while(offset < 0) offset += loopWidth;
+      track.style.transform = `translateX(-${offset.toFixed(2)}px)`;
+      
+      const activeIdx = Math.floor((offset / itemWidth) + 0.5) % ORIG;
+      dots.forEach((d, i) => d.classList.toggle('active', i === activeIdx));
+    }
   }
-  allItems.forEach(el=>{
-    el.addEventListener('click',()=>open(Number(el.dataset.idx)));
-    el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open(Number(el.dataset.idx));}});
+
+  let lastFrameTime = performance.now();
+  function loop(now){
+    const dt = Math.min((now - lastFrameTime) / 16.67, 3);
+    lastFrameTime = now;
+
+    if(!isDragging && !isPaused && loopWidth > 0){
+      offset += SPEED * dt;
+      updateTransform();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function onPointerDown(e){
+    isDragging = true;
+    hasMoved = false;
+    isPaused = true;
+    clearTimeout(resumeTimer);
+    
+    startX = e.clientX ?? (e.touches && e.touches[0].clientX) ?? 0;
+    startY = e.clientY ?? (e.touches && e.touches[0].clientY) ?? 0;
+    lastX = startX;
+    lastTime = performance.now();
+    startOffset = offset;
+    velocity = 0;
+    outer.classList.add('grabbing');
+  }
+
+  function onPointerMove(e){
+    if(!isDragging) return;
+    const clientX = e.clientX ?? (e.touches && e.touches[0].clientX) ?? 0;
+    const clientY = e.clientY ?? (e.touches && e.touches[0].clientY) ?? 0;
+    const dx = clientX - startX;
+    const dy = clientY - startY;
+
+    if(!hasMoved){
+      if(Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8){
+        isDragging = false;
+        outer.classList.remove('grabbing');
+        resumeTimer = setTimeout(() => { isPaused = false; }, 1200);
+        return;
+      }
+      if(Math.abs(dx) > 6){
+        hasMoved = true;
+      }
+    }
+
+    if(hasMoved){
+      if(e.cancelable) e.preventDefault();
+      const now = performance.now();
+      const dt = now - lastTime || 16;
+      velocity = (clientX - lastX) / dt;
+      lastX = clientX;
+      lastTime = now;
+
+      offset = startOffset - dx;
+      updateTransform();
+    }
+  }
+
+  function onPointerUp(){
+    if(!isDragging) return;
+    isDragging = false;
+    outer.classList.remove('grabbing');
+
+    if(hasMoved && Math.abs(velocity) > 0.25){
+      let momentum = velocity * 130;
+      const friction = 0.91;
+      function applyFling(){
+        if(Math.abs(momentum) > 0.5){
+          offset -= momentum * 0.16;
+          momentum *= friction;
+          updateTransform();
+          requestAnimationFrame(applyFling);
+        } else {
+          resumeTimer = setTimeout(() => { isPaused = false; }, 1400);
+        }
+      }
+      applyFling();
+    } else {
+      resumeTimer = setTimeout(() => { isPaused = false; }, 1400);
+    }
+  }
+
+  track.addEventListener('mousedown', onPointerDown);
+  window.addEventListener('mousemove', onPointerMove);
+  window.addEventListener('mouseup', onPointerUp);
+
+  track.addEventListener('touchstart', onPointerDown, { passive: true });
+  window.addEventListener('touchmove', onPointerMove, { passive: false });
+  window.addEventListener('touchend', onPointerUp, { passive: true });
+  window.addEventListener('touchcancel', onPointerUp, { passive: true });
+
+  outer.addEventListener('mouseenter', () => { if(!isDragging) isPaused = true; });
+  outer.addEventListener('mouseleave', () => { if(!isDragging) isPaused = false; });
+
+  dots.forEach((dot, i) => {
+    dot.addEventListener('click', () => {
+      clearTimeout(resumeTimer);
+      isPaused = true;
+      offset = i * itemWidth;
+      updateTransform();
+      resumeTimer = setTimeout(() => { isPaused = false; }, 2200);
+    });
   });
-  lbX.addEventListener('click',close);
-  lbPrev.addEventListener('click',()=>open(cur-1));
-  lbNext.addEventListener('click',()=>open(cur+1));
-  lb.addEventListener('click',e=>{if(e.target===lb)close();});
-  document.addEventListener('keydown',e=>{
-    if(!lb.classList.contains('on')) return;
-    if(e.key==='Escape') close();
-    if(e.key==='ArrowLeft') open(cur-1);
-    if(e.key==='ArrowRight') open(cur+1);
+
+  track.querySelectorAll('.slide-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if(hasMoved) {
+        e.preventDefault();
+        return;
+      }
+      const idx = item.dataset.idx;
+      if(idx !== undefined && window.openGalleryLightbox){
+        window.openGalleryLightbox(Number(idx));
+      }
+    });
   });
-  // touch swipe on lightbox
-  let tx=0;
-  lb.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;},{passive:true});
-  lb.addEventListener('touchend',e=>{
-    const dx=e.changedTouches[0].clientX-tx;
-    if(Math.abs(dx)>45) dx<0?open(cur+1):open(cur-1);
-  });
+
+  window.addEventListener('resize', measure);
+  window.addEventListener('load', measure);
+  setTimeout(measure, 200);
+  measure();
+  requestAnimationFrame(loop);
 }());
 
 /* ── TILT EFFECT (desktop gallery) ────────── */
@@ -1233,6 +1374,15 @@ footer::before{
     splash.classList.add('hide');
     splash.style.pointerEvents = 'none';
     setTimeout(() => { splash.style.display = 'none'; }, 850);
+
+    // Direct to hero section, NOT letter section
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const hero = document.getElementById('hero');
+    if (hero) hero.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (window.location.hash) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+
     startAudio();
   }
 
