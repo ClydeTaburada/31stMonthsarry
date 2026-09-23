@@ -375,17 +375,26 @@ section{padding:100px 24px}
 }
 .slider-track{
   display:flex;
-  gap:16px;
+  /* no gap here — use margin-right on items for clean infinite-loop math */
   will-change:transform;
+  animation:slide-infinite 30s linear infinite;
+}
+/* Pause on hover (desktop) */
+.slider-outer:hover .slider-track{
+  animation-play-state:paused;
+}
+/* Pause on touch (toggled by JS) */
+.slider-outer.touch-pause .slider-track{
+  animation-play-state:paused;
 }
 .slide-item{
-  flex:0 0 80vw;max-width:320px;
+  flex:0 0 80vw;max-width:300px;
   aspect-ratio:3/4;
   border-radius:20px;overflow:hidden;
   cursor:pointer;
   border:1px solid rgba(196,181,253,0.12);
   box-shadow:0 6px 30px rgba(0,0,20,0.5);
-  position:relative;
+  margin-right:16px; /* drives loop math: -50% = exactly 6 items */
   transition:box-shadow 0.3s;
 }
 .slide-item img{
@@ -547,6 +556,8 @@ footer::before{
 @keyframes floatUp{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-25px) rotate(5deg)}}
 @keyframes hbeat{0%,100%{transform:scale(1)}14%{transform:scale(1.25)}28%{transform:scale(1)}42%{transform:scale(1.18)}56%{transform:scale(1)}}
 @keyframes flyrise{0%{transform:translateY(0) scale(1);opacity:0}10%{opacity:1}80%{opacity:0.6}100%{transform:translateY(-110vh) scale(0.5);opacity:0}}
+/* Infinite slider: -50% = exactly 6 items (6 originals + 6 clones = 12 total, half = one full loop) */
+@keyframes slide-infinite{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 
 /* ═══════════════════════════════════════════
    RESPONSIVE TWEAKS
@@ -666,10 +677,11 @@ footer::before{
   <span id="music-icon">🎵</span>
 </button>
 
-<!-- hidden YouTube player -->
-<div style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden">
-  <div id="yt-player"></div>
-</div>
+<!-- Background music: Libo-libong Buwan by Kyle Raphael -->
+<audio id="bg-audio" loop preload="auto">
+  <source src="music.mp3" type="audio/mpeg">
+  <source src="music.m4a" type="audio/mp4">
+</audio>
 
 <!-- ── NAV ─────────────────────────────────── -->
 <nav id="site-nav">
@@ -692,7 +704,7 @@ footer::before{
   <div class="hero-content">
     <div class="hero-badge">
       <div class="badge-dot"></div>
-      Tomorrow · September 24, 2026
+      September 24, 2026
     </div>
     <p class="hero-kicker">Happy</p>
     <h1 class="hero-title">31st<br/>Monthsary</h1>
@@ -1055,49 +1067,37 @@ footer::before{
   document.querySelectorAll('.rv').forEach(el=>obs.observe(el));
 }());
 
-/* ── INFINITE AUTO-SLIDER ──────────────────── */
+/* ── SMOOTH CSS INFINITE SLIDER ────────── */
 (function(){
-  const track = document.getElementById('slider-track');
-  if(!track) return;
-  const dots = [...document.querySelectorAll('#g-dots .g-dot')];
-  const ORIG  = 6;      // original photo count
-  const GAP   = 16;     // px gap
-  const SPEED = 0.55;   // px per frame
-  let offset  = 0;
-  let paused  = false;
-  let itemW   = 0;
-  let loopW   = 0;
+  const track  = document.getElementById('slider-track');
+  const outer  = track ? track.parentElement : null;
+  if(!track || !outer) return;
 
-  function measure(){
-    const item = track.querySelector('.slide-item');
-    if(!item) return;
-    itemW = item.offsetWidth + GAP;
-    loopW = itemW * ORIG;
-  }
+  // Touch: pause while finger is down, resume 1.2s after lift
+  let resumeTimer;
+  outer.addEventListener('touchstart', () => {
+    clearTimeout(resumeTimer);
+    outer.classList.add('touch-pause');
+  }, {passive:true});
+  outer.addEventListener('touchend', () => {
+    resumeTimer = setTimeout(() => outer.classList.remove('touch-pause'), 1200);
+  }, {passive:true});
 
-  function updateDots(){
-    const idx = Math.floor((offset % loopW) / itemW) % ORIG;
+  // Dot progress: 30s ÷ 6 photos = 5s per photo
+  const DURATION = 30000;
+  const ORIG     = 6;
+  const dots     = [...document.querySelectorAll('#g-dots .g-dot')];
+  let startTime  = null;
+  function tickDots(ts){
+    if(!startTime) startTime = ts;
+    const elapsed = (ts - startTime) % DURATION;
+    const idx = Math.floor((elapsed / DURATION) * ORIG);
     dots.forEach((d,i) => d.classList.toggle('active', i === idx));
+    requestAnimationFrame(tickDots);
   }
+  if(dots.length) requestAnimationFrame(tickDots);
 
-  function step(){
-    if(!paused){
-      offset += SPEED;
-      if(offset >= loopW) offset -= loopW;
-      track.style.transform = `translateX(-${offset}px)`;
-      updateDots();
-    }
-    requestAnimationFrame(step);
-  }
-
-  // Pause on hover / touch so user can tap
-  const outer = track.parentElement;
-  outer.addEventListener('mouseenter',  () => { paused = true; });
-  outer.addEventListener('mouseleave',  () => { paused = false; });
-  outer.addEventListener('touchstart',  () => { paused = true; },  {passive:true});
-  outer.addEventListener('touchend',    () => { setTimeout(() => paused = false, 1400); }, {passive:true});
-
-  // Open lightbox on slide tap
+  // Lightbox on tap
   const photos = [
     'photos/cb118438-329d-4212-8d9a-624b9e11e569.jpg',
     'photos/3b454914-ecfd-410f-addb-d20e0df068d8 (1).jpg',
@@ -1115,10 +1115,6 @@ footer::before{
       document.body.style.overflow = 'hidden';
     });
   });
-
-  window.addEventListener('resize', measure);
-  measure();
-  requestAnimationFrame(step);
 }());
 
 /* ── GALLERY LIGHTBOX ──────────────────────── */
@@ -1205,59 +1201,95 @@ footer::before{
   const msBtn    = document.getElementById('ms-btn');
   const musicBtn = document.getElementById('music-btn');
   const musicIcon= document.getElementById('music-icon');
+  const audio    = document.getElementById('bg-audio');
 
-  // YouTube video ID for "Libu-Libong Buwan" by Kyle Raphael
-  const VIDEO_ID = 'lJZaI_SQPK4';
+  if(!audio) return;
 
-  let player = null;
-  let playing = false;
+  let isPlaying = false;
 
-  // Load YouTube IFrame API
-  const tag = document.createElement('script');
-  tag.src = 'https://www.youtube.com/iframe_api';
-  document.head.appendChild(tag);
+  function startAudio() {
+    audio.volume = 0.9;
+    const p = audio.play();
+    if(p && p.then) {
+      p.then(() => {
+        isPlaying = true;
+        if(musicIcon) musicIcon.textContent = '🔊';
+        if(musicBtn) musicBtn.classList.add('playing');
+      }).catch(err => {
+        console.warn('Autoplay prevented or waiting for interaction:', err);
+      });
+    }
+  }
 
-  window.onYouTubeIframeAPIReady = function() {
-    player = new YT.Player('yt-player', {
-      videoId: VIDEO_ID,
-      playerVars: {
-        autoplay: 0,
-        loop: 1,
-        playlist: VIDEO_ID,
-        controls: 0,
-        disablekb: 1,
-        modestbranding: 1,
-      },
-      events: {
-        onReady: function() {
-          // Wait for splash button — start on tap
-        },
-        onStateChange: function(e) {
-          playing = e.data === YT.PlayerState.PLAYING;
-          musicIcon.textContent = playing ? '🔊' : '🎵';
-          musicBtn.classList.toggle('playing', playing);
-        }
+  function pauseAudio() {
+    audio.pause();
+    isPlaying = false;
+    if(musicIcon) musicIcon.textContent = '🎵';
+    if(musicBtn) musicBtn.classList.remove('playing');
+  }
+
+  function dismissSplash() {
+    if(!splash) return;
+    splash.classList.add('hide');
+    splash.style.pointerEvents = 'none';
+    setTimeout(() => { splash.style.display = 'none'; }, 850);
+    startAudio();
+  }
+
+  // Splash button and container tap
+  if(msBtn) {
+    msBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      dismissSplash();
+    });
+    msBtn.addEventListener('touchend', function(e) {
+      e.stopPropagation();
+      dismissSplash();
+    }, {passive:true});
+  }
+
+  if(splash) {
+    splash.addEventListener('click', function() {
+      dismissSplash();
+    });
+  }
+
+  // Floating button toggle
+  if(musicBtn) {
+    musicBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if(!audio.paused && isPlaying) {
+        pauseAudio();
+      } else {
+        startAudio();
       }
     });
-  };
+  }
 
-  // Splash button → hide overlay + start music
-  msBtn.addEventListener('click', function() {
-    splash.classList.add('hide');
-    if(player && player.playVideo) {
-      player.playVideo();
-    }
+  // Keep UI in sync with audio events
+  audio.addEventListener('play', () => {
+    isPlaying = true;
+    if(musicIcon) musicIcon.textContent = '🔊';
+    if(musicBtn) musicBtn.classList.add('playing');
   });
 
-  // Floating button → toggle pause/play
-  musicBtn.addEventListener('click', function() {
-    if(!player) return;
-    if(playing) {
-      player.pauseVideo();
-    } else {
-      player.playVideo();
+  audio.addEventListener('pause', () => {
+    isPlaying = false;
+    if(musicIcon) musicIcon.textContent = '🎵';
+    if(musicBtn) musicBtn.classList.remove('playing');
+  });
+
+  // Global click fallback: once splash is hidden, if not playing, start music on next interaction
+  document.addEventListener('click', function() {
+    if(splash && splash.classList.contains('hide') && audio.paused && !isPlaying) {
+      startAudio();
     }
   });
+  document.addEventListener('touchend', function() {
+    if(splash && splash.classList.contains('hide') && audio.paused && !isPlaying) {
+      startAudio();
+    }
+  }, {passive:true});
 }());
 </script>
 </body>
